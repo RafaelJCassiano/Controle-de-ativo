@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VALE DO PARAÍBA - Operacional</title>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    <style>
+        :root {
+            --bg: #0f172a; --card: #1e293b; --text: #f8fafc;
+            --border: #334155; --accent: #3b82f6; --danger: #ef4444; --warning: #f59e0b; --success: #10b981;
+        }
+        [data-theme="light"] {
+            --bg: #f1f5f9; --card: #ffffff; --text: #1e293b; --border: #cbd5e1; --accent: #2563eb;
+        }
+
+        body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; }
+        .container { width: 96%; max-width: 1400px; margin: 0 auto; padding: 10px 0; }
+
+        @media (min-width: 768px) {
+            .grid-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 15px; }
+            .form-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+        }
+
+        .top-nav { position: sticky; top: 0; background: var(--bg); z-index: 10; border-bottom: 1px solid var(--border); padding-top: 10px; }
+        .header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .tabs { display: flex; gap: 5px; overflow-x: auto; padding-bottom: 5px; }
+        .tab-btn { border: none; background: var(--card); color: var(--text); cursor: pointer; border-radius: 8px; font-weight: bold; white-space: nowrap; padding: 10px 15px; }
+        .tab-btn.active { background: var(--accent); color: white; }
+
+        .city-scroll { display: flex; gap: 8px; overflow-x: auto; padding: 10px 0; margin-bottom: 5px; }
+        .city-badge { padding: 6px 15px; background: var(--card); border: 1px solid var(--border); border-radius: 20px; font-size: 12px; cursor: pointer; white-space: nowrap; }
+        .city-badge.active { background: var(--accent); border-color: var(--accent); color: white; }
+
+        .item-card { background: var(--card); padding: 15px; border-radius: 12px; margin-top: 10px; border: 1px solid var(--border); cursor: pointer; }
+        .card-line { font-size: 13px; margin: 4px 0; opacity: 0.85; }
+        .provisorio { border-left: 6px solid var(--warning) !important; }
+
+        .search-bar { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--card); color: var(--text); box-sizing: border-box; }
+
+        #modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 100; justify-content: center; align-items: center; padding: 10px; }
+        .modal-content { background: var(--card); padding: 20px; border-radius: 15px; width: 100%; max-width: 800px; max-height: 90vh; overflow-y: auto; }
+        
+        .form-group { display: flex; flex-direction: column; margin-bottom: 10px; }
+        .form-group label { font-size: 11px; margin-bottom: 4px; color: var(--accent); font-weight: bold; }
+        .form-group input { padding: 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: var(--text); }
+
+        button { border: none; cursor: pointer; font-weight: bold; border-radius: 8px; }
+        .btn-primary { background: var(--accent); color: white; padding: 12px; }
+        .btn-success { background: var(--success); color: white; padding: 10px; }
+        .btn-danger { background: var(--danger); color: white; padding: 5px 12px; }
+        
+        .alerta-box { background: rgba(245, 158, 11, 0.15); border: 1px solid var(--warning); padding: 12px; border-radius: 8px; margin-bottom: 15px; }
+        .sub-tabs { display: flex; gap: 15px; margin: 15px 0; border-bottom: 1px solid var(--border); }
+        .sub-tab-btn { background: none; color: var(--text); opacity: 0.5; padding: 8px; border: none; cursor: pointer; font-weight: bold; }
+        .sub-tab-btn.active { opacity: 1; border-bottom: 3px solid var(--accent); }
+    </style>
+</head>
+<body>
+    <div style="text-align: center; padding: 20px;">
+        <img src="sanesi.png" alt="logo" style="height: 90px;">
+    </div>
+
+    <script>document.body.setAttribute('data-theme', localStorage.getItem('theme') || 'dark');</script>
+
+    <div id="login-container" style="display: flex; height: 100vh; justify-content: center; align-items: center;">
+        <div style="background: var(--card); padding: 30px; border-radius: 15px; text-align: center; width: 90%; max-width: 320px; border: 1px solid var(--border);">
+            <h2 style="color: var(--accent); margin-top: 0;">Controle de Equipamento</h2>
+            <input type="text" id="user" class="search-bar" placeholder="Usuário" style="margin-bottom: 10px;">
+            <input type="password" id="pass" class="search-bar" placeholder="Senha" style="margin-bottom: 15px;">
+            <button onclick="fazerLogin()" class="btn-primary" style="width: 100%;">ENTRAR</button>
+        </div>
+    </div>
+
+    <div id="dashboard" style="display: none;">
+        <div class="top-nav">
+            <div class="container">
+                <div class="header-top">
+                    <div>
+                        <strong id="user-display">---</strong>
+                        <div style="display: flex; gap: 10px; font-size: 14px; margin-top: 4px;">
+                            <span class="stat-badge">📱 <span id="total-cel">0</span></span>
+                            <span class="stat-badge">🖨️ <span id="total-imp">0</span></span>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <button onclick="toggleTheme()" style="background:none; color:var(--text); font-size: 20px;">🌓</button>
+                        <button onclick="location.reload()" class="btn-danger">SAIR</button>
+                    </div>
+                </div>
+                <div class="tabs">
+                    <button id="tab-btn-estoque" class="tab-btn active" onclick="switchTab('estoque')">📦 ESTOQUE</button>
+                    <button id="tab-btn-movs" class="tab-btn" onclick="switchTab('movs')">📑 HISTÓRICO</button>
+                    <button id="tab-admin-btn" class="tab-btn" style="display:none;" onclick="switchTab('admin')">⚙️ ADM</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="tab-estoque" class="container">
+            <div class="sticky-header" style="position: sticky; top: 65px; background: var(--bg); z-index: 9; padding: 10px 0; margin-top: -10px;">
+                <input type="text" id="busca" class="search-bar" placeholder="🔍 Buscar por nome, modelo, patrimônio, serial ou bateria..." onkeyup="renderTable()">
+                <div class="city-scroll" id="lista-cidades" style="margin-bottom: 0;"></div>
+            </div>
+            <div id="lista-ativos" class="grid-cards" style="margin-top: 10px;"></div>
+        </div>
+
+        <div id="tab-movs" class="container" style="display: none;">
+            <div class="sticky-header" style="position: sticky; top: 65px; background: var(--bg); z-index: 9; padding: 10px 0; margin-top: -10px;">
+                <input type="text" id="busca-hist" class="search-bar" placeholder="🔍 Buscar no histórico (nome, patrimônio, modelo)..." onkeyup="renderHistorico()">
+            </div>
+            <div id="lista-historico" class="grid-cards" style="margin-top: 10px;"></div>
+        </div>
+
+        <div id="tab-admin" class="container" style="display: none;">
+            <div id="alerta-geral" class="alerta-box" style="display: none;">
+                <strong style="color: var(--warning);">⚠️ PENDENTES DE RETORNO:</strong>
+                <div id="lista-alerta-pendente" style="font-size: 12px; margin-top: 10px;"></div>
+            </div>
+
+            <div class="sub-tabs">
+                <button class="sub-tab-btn active" id="sub-btn-ativos" onclick="switchSubTab('ativos')">EQUIPAMENTOS</button>
+                <button class="sub-tab-btn" id="sub-btn-usuarios" onclick="switchSubTab('usuarios')">ACESSO USUÁRIOS</button>
+            </div>
+
+            <div id="area-ativos-adm">
+                <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                    <button class="btn-primary" onclick="novaLinhaAdmin()">+ NOVO ATIVO</button>
+                    <button class="btn-success" onclick="gerarPDFAdmin()" style="background:#0ea5e9">📄 GERAR PDF</button>
+                </div>
+                <input type="text" id="busca-adm" class="search-bar" placeholder="Filtrar por qualquer campo..." onkeyup="renderAdminList()">
+                <div id="lista-admin-ativos" class="grid-cards" style="margin-top: 15px;"></div>
+            </div>
+
+            <div id="area-usuarios-adm" style="display: none;">
+                <button class="btn-primary" onclick="abrirEdicaoUsuario()" style="margin-bottom: 15px;">+ NOVO USUÁRIO</button>
+                <div id="lista-admin-usuarios" class="grid-cards"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal">
+        <div class="modal-content">
+            <h3 id="modal-titulo" style="margin-top:0">Editar</h3>
+            <div id="form-container"></div>
+            <div style="display: flex; gap: 10px; margin-top: 25px;">
+                <button onclick="fecharModal()" style="flex: 1; background: #64748b; color: white; padding: 12px;">DESCARTAR</button>
+                <button id="btn-salvar-modal" class="btn-primary" style="flex: 1;">SALVAR</button>
+            </div>
+            <button id="btn-pdf-modal" class="btn-success" style="width: 100%; margin-top: 15px; display: none; padding: 10px; background: #0ea5e9;">📄 GERAR PDF DESTE ITEM</button>
+            <button id="btn-deletar-modal" class="btn-danger" style="width: 100%; margin-top: 15px; display: none; padding: 10px;">EXCLUIR REGISTRO</button>
+        </div>
+    </div>
+		<script>
+    const CAMPOS_ESTOQUE = [
+        { label: 'Tipo', chave: 'tipo_equipamento' },     
+        { label: 'Modelo', chave: 'modelo' },
+        { label: 'Cidade', chave: 'cidade' },
+        { label: 'Patrimônio', chave: 'patrimonio' },
+        { label: 'N⁰Contato', chave: 'linha' },
+        { label: 'S/N', chave: 'serial' },
+        { label: 'IMEI', chave:'imei'},
+        { label: 'Bateria', chave: 'bateria'}
+    ];
+
+    const CAMPOS_HISTORICO = [
+        { label: 'Usuario Responsavel', chave: 'usuario_nome'},
+        { label: 'Equipamento', chave: 'tipo_equipamento' },
+        { label: 'Patrimônio', chave: 'patrimonio' }
+    ];
+
+    const CAMPOS_ADM = [
+        { label: 'Resp', chave: 'nome' },
+        { label: 'Pat', chave: 'patrimonio' },
+        { label: 'Cidades', chave: 'cidade' },
+        { label: 'S/N',chave: 'serial'},
+        { label: 'IMEI' ,chave:'imei'},
+        { label: 'Bateria', chave: 'bateria'}
+    ];
+
+    const SB_URL = "https://zkddyuydtdnukhyvsqxy.supabase.co";
+    const SB_KEY = "sb_publishable_eMkWUvPEc06RpAES2YFyeQ_FWvlaYLl";
+    const _supabase = supabase.createClient(SB_URL, SB_KEY);
+
+    let dados = [], usuarios = [], historicoGlobal = [], userLogado = null, citySel = 'TODAS';
+
+    // Nova função para forçar padronização de texto
+    function limparString(str) {
+        if (!str) return str;
+        return str.toString()
+            .toUpperCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '') // Remove todos os acentos
+            .trim(); // Remove espaços antes e depois
+    }
+
+    // Função para formatar o telefone
+    function formatarTelefone(v) {
+        if (!v) return v;
+        // Remove tudo que não for dígito
+        v = v.replace(/\D/g, ""); 
+        
+        // Aplica a formatação se tiver 11 dígitos (celular) ou 10 dígitos (fixo)
+        if (v.length === 11) {
+            return v.replace(/^(\d{2})(\d{5})(\d{4})$/, "($1)$2-$3"); 
+        } else if (v.length === 10) {
+            return v.replace(/^(\d{2})(\d{4})(\d{4})$/, "($1)$2-$3"); 
+        }
+        
+        // Se não tiver o tamanho esperado, retorna apenas os números para não perder dados
+        return v; 
+    }
+
+    function switchSubTab(st) {
+        document.getElementById('area-ativos-adm').style.display = st === 'ativos' ? 'block' : 'none';
+        document.getElementById('area-usuarios-adm').style.display = st === 'usuarios' ? 'block' : 'none';
+        
+        document.getElementById('sub-btn-ativos').classList.toggle('active', st === 'ativos');
+        document.getElementById('sub-btn-usuarios').classList.toggle('active', st === 'usuarios');
+
+        if (st === 'usuarios') renderUserList();
+        else renderAdminList();
+    }
+
+    async function fazerLogin() {
+        const u = document.getElementById('user').value, p = document.getElementById('pass').value;
+        const { data } = await _supabase.from('usuarios_sistema').select('*').eq('login', u).eq('senha', p).single();
+        if(data) {
+            userLogado = data;
+            document.getElementById('login-container').style.display = 'none';
+            document.getElementById('dashboard').style.display = 'block';
+            document.getElementById('user-display').innerText = `Olá, ${userLogado.nome_exibicao}`;
+            if(userLogado.nivel_acesso === 'admin') document.getElementById('tab-admin-btn').style.display = 'block';
+            loadData();
+        } else alert("Acesso Negado.");
+    }
+
+    async function loadData() {
+        const { data } = await _supabase.from('estoque').select('*').order('nome');
+        dados = data;
+        if(userLogado.nivel_acesso === 'admin') {
+            const resUsers = await _supabase.from('usuarios_sistema').select('*').order('nome_exibicao');
+            usuarios = resUsers.data;
+        }
+        await carregarHistorico(); 
+        renderCities();
+        renderTable();
+    }
+
+    function switchTab(t) {
+        ['estoque', 'movs', 'admin'].forEach(x => {
+            const el = document.getElementById('tab-'+x);
+            if(el) el.style.display = x === t ? 'block' : 'none';
+        });
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.id.includes(t)));
+        
+        if(t === 'admin') {
+            switchSubTab('ativos');
+            carregarAlertasPendentes();
+        }
+        if(t === 'movs') carregarHistorico();
+    }
+
+    function renderTable() {
+        const b = document.getElementById('busca').value.toUpperCase();
+        let f = dados.filter(i => `${i.nome} ${i.modelo} ${i.patrimonio} ${i.serial} ${i.bateria} ${i.imei} ${i.item}`.toUpperCase().includes(b));
+        if(citySel !== 'TODAS') f = f.filter(i => i.cidade === citySel);
+
+        document.getElementById('total-cel').innerText = f.filter(i => i.tipo_equipamento === 'CELULAR').length;
+        document.getElementById('total-imp').innerText = f.filter(i => i.tipo_equipamento === 'IMPRESSORA').length;
+        
+        document.getElementById('lista-ativos').innerHTML = f.map(i => {
+            const p = i.obs && i.obs.includes("(PROVISÓRIO)");
+            
+            const histItem = historicoGlobal.filter(h => h.equipamento_id === i.id);
+            let exDonos = [...new Set(histItem.map(h => h.colaborador_anterior))].filter(d => d && d !== i.nome && d !== 'ESTOQUE');
+            
+            let tagLinhaTempo = exDonos.length > 0 
+                ? `<div style="font-size:11px; color:var(--accent); margin-top:10px; padding-top:8px; border-top:1px dashed var(--border);">
+                    🕒 <b>Já foi de:</b> ${exDonos.slice(0, 3).join(', ')} ${exDonos.length > 3 ? '...' : ''}
+                   </div>` 
+                : '';
+return `<div class="item-card ${p ? 'provisorio' : ''}">
+                <div style="display:flex; justify-content:space-between"><strong>${i.nome || 'ESTOQUE'}</strong></div>
+                ${CAMPOS_ESTOQUE.map(c => `<div class="card-line"><strong>${c.label}:</strong> ${i[c.chave] || '---'}</div>`).join('')}
+                
+                ${tagLinhaTempo}
+                
+                ${p ? `<button onclick='confirmarRetorno(${JSON.stringify(i).replace(/'/g, "&#39;")})' class="btn-success" style="width:100%; margin-top:10px">↩ RETORNAR</button>` : 
+                `<button onclick='abrirModalMovimentar(${JSON.stringify(i).replace(/'/g, "&#39;")})' class="btn-primary" style="width:100%; margin-top:10px">MOVIMENTAR</button>`}
+            </div>`}).join('');
+    }
+
+    function renderAdminList() {
+        const b = document.getElementById('busca-adm').value.toUpperCase();
+        let f = dados.filter(i => `${i.nome} ${i.modelo} ${i.patrimonio} ${i.serial} ${i.bateria}`.toUpperCase().includes(b));
+        f.sort((a, b) => (parseInt(a.item) || 0) - (parseInt(b.item) || 0));
+
+        document.getElementById('lista-admin-ativos').innerHTML = f.map(i => `
+            <div class="item-card" onclick='abrirEdicaoAtivo(${JSON.stringify(i).replace(/'/g, "&#39;")})'>
+                <strong>ID ${i.item}: ${i.tipo_equipamento}</strong>
+                <div class="card-line">
+                    ${CAMPOS_ADM.map(c => `${c.label}: ${i[c.chave] || '---'}`).join(' | ')}
+                </div>
+            </div>`).join('');
+    }
+
+    function renderUserList() {
+        document.getElementById('lista-admin-usuarios').innerHTML = usuarios.map(u => `
+            <div class="item-card" onclick='abrirEdicaoUsuario(${JSON.stringify(u).replace(/'/g, "&#39;")})'>
+                <strong>${u.nome_exibicao}</strong>
+                <div class="card-line">Login: ${u.login} | Nível: ${u.nivel_acesso}</div>
+            </div>`).join('');
+    }
+    
+    function abrirEdicaoAtivo(i, isResolve = false) {
+        document.getElementById('modal').style.display = 'flex';
+        document.getElementById('modal-titulo').innerText = isResolve ? "Resolver Pendência" : "Editar Ativo";
+        document.getElementById('btn-deletar-modal').style.display = 'block';
+        document.getElementById('btn-deletar-modal').onclick = () => deletarItem(i.id);
+        document.getElementById('btn-pdf-modal').style.display = 'block';
+        document.getElementById('btn-pdf-modal').onclick = () => gerarPDFItem(i);
+        
+        let obsText = i.obs || '';
+        let nomeParaEditar = i.nome;
+
+        if (isResolve) {
+            const matchOriginal = obsText.match(/\(PROVISÓRIO\) \[DE:(.*?)\]/);
+            if (matchOriginal) nomeParaEditar = matchOriginal[1];
+            obsText = obsText.replace(/\(PROVISÓRIO\) \[DE:.*?\](?: \[MANUTENÇÃO\])?(?: \| )?/, '').trim();
+        }
+
+        const campos = [
+            {k:'item', l:'Item/ID'}, {k:'tipo_equipamento', l:'Tipo de equipamento'}, {k:'modelo', l:'Modelo'},
+            {k:'patrimonio', l:'Patrimônio'}, {k:'serial', l:'Serial'}, {k:'imei', l:'IMEI'},
+            {k:'linha', l:'N⁰Contato'}, {k:'cidade', l:'Cidade'}, {k:'nome', l:'Responsável'},
+            {k:'bateria', l:'Bateria (Vínculo)'},
+            {k:'email', l:'E-MAIL'},
+            {k:'senha', l:'senha do e-mail'},
+            {k:'cpf', l:'CPF/RG'},
+            {k:'novo', l:'É novo?'},
+            {k:'descricao', l:'Descrição'}
+        ];document.getElementById('form-container').innerHTML = `<div class="form-grid">
+            ${campos.map(c => {
+                let val = i[c.k] || '';
+                if(c.k === 'nome') val = nomeParaEditar;
+                return `<div class="form-group"><label>${c.l}</label><input id="edit-${c.k}" value="${val}"></div>`;
+            }).join('')}
+        </div><div class="form-group"><label>Observação</label><input id="edit-obs" value="${obsText}"></div>`;
+        
+        document.getElementById('btn-salvar-modal').onclick = async () => {
+            const obj = {}; 
+            campos.forEach(c => {
+                let val = document.getElementById(`edit-${c.k}`).value;
+                if (c.k === 'email') {
+                    // Emails não devem ter acento nem ser maiúsculos
+                    obj[c.k] = val.trim().toLowerCase(); 
+                } else if (c.k === 'senha') {
+                    // Senha não deve ser alterada de minúsculo/maiúsculo
+                    obj[c.k] = val.trim();
+                } else if (c.k === 'linha') {
+                    // Formatar o telefone
+                    obj[c.k] = formatarTelefone(val);
+                } else {
+                    // Força maiúsculo, sem acento, sem espaço no final
+                    obj[c.k] = limparString(val);
+                }
+            });
+            obj.obs = limparString(document.getElementById('edit-obs').value);
+
+            await _supabase.from('estoque').update(obj).eq('id', i.id);
+            if(isResolve) await _supabase.from('historico').insert([{ equipamento_id: i.id, usuario_nome: userLogado.nome_exibicao, colaborador_anterior: i.nome, colaborador_novo: obj.nome, tipo_acao: "RESOLVIDO" }]);
+            fecharModal(); loadData();
+        };
+    }
+
+    function abrirModalMovimentar(i) {
+        document.getElementById('modal').style.display = 'flex';
+        document.getElementById('modal-titulo').innerText = "Movimentar";
+        document.getElementById('btn-deletar-modal').style.display = 'none';
+        document.getElementById('btn-pdf-modal').style.display = 'none';
+        document.getElementById('form-container').innerHTML = `
+            <div class="form-group"><label>Para:</label><input type="text" id="m-novo"></div>
+            <div class="form-group"><label>Obs (Exclusivo Histórico):</label><input type="text" id="m-obs"></div>
+            <div class="form-group" style="flex-direction: row; align-items: center; gap: 8px; margin-top: 10px; background: rgba(239, 68, 68, 0.1); padding: 10px; border-radius: 8px; border: 1px solid var(--danger);">
+                <input type="checkbox" id="m-manu" style="width: auto;">
+                <label style="margin: 0; font-size: 13px;" for="m-manu">Enviar para Manutenção?</label>
+            </div>`;
+        document.getElementById('btn-salvar-modal').onclick = async () => {
+            // Força maiúsculo, sem acento, sem espaço no final na hora de movimentar também
+            const n = limparString(document.getElementById('m-novo').value); if(!n) return;
+            const isManu = document.getElementById('m-manu').checked;
+            const tag = `(PROVISÓRIO) [DE:${i.nome || 'ESTOQUE'}]${isManu ? ' [MANUTENÇÃO]' : ''}`;
+            const newObs = i.obs ? `${tag} | ${i.obs}` : tag;
+            await _supabase.from('estoque').update({ nome: n, obs: newObs }).eq('id', i.id);
+            await _supabase.from('historico').insert([{ equipamento_id: i.id, usuario_nome: userLogado.nome_exibicao, colaborador_anterior: i.nome, colaborador_novo: n, tipo_acao: isManu ? "MOVIMENTAÇÃO (MANUTENÇÃO)" : "MOVIMENTAÇÃO" }]);
+            fecharModal(); loadData();
+        };
+    }
+    
+    async function confirmarRetorno(i) {
+        const m = i.obs.match(/\(PROVISÓRIO\) \[DE:(.*?)\]/); const d = m ? m[1] : 'ESTOQUE';
+        if(confirm(`Retornar para ${d}?`)) {
+            const originalObs = i.obs.replace(/\(PROVISÓRIO\) \[DE:.*?\](?: \[MANUTENÇÃO\])?(?: \| )?/, '').trim();
+            await _supabase.from('estoque').update({ nome: d, obs: originalObs }).eq('id', i.id);
+            await _supabase.from('historico').insert([{ equipamento_id: i.id, usuario_nome: userLogado.nome_exibicao, colaborador_anterior: i.nome, colaborador_novo: d, tipo_acao: "RETORNO" }]);
+            loadData();
+        }
+    }
+
+    function gerarPDFAdmin() {
+        const { jsPDF } = window.jspdf; const doc = new jsPDF('l');
+        const dadosOrdenados = [...dados].sort((a, b) => (parseInt(a.item) || 0) - (parseInt(b.item) || 0));
+        doc.text("Relatório de Estoque TACE - Vale do Paraíba", 14, 15);
+        doc.autoTable({
+            head: [['ID', 'Nome', 'Cidade', 'IMEI', 'Serial', 'Patrimônio', 'Bateria', 'Obs']],
+            body: dadosOrdenados.map(i => [i.item, i.nome, i.cidade, i.imei, i.serial, i.patrimonio, i.bateria, i.obs]),
+            startY: 20, styles: { fontSize: 8 }
+        });
+        doc.save("estoque_tace.pdf");
+    }
+
+    function gerarPDFItem(i) {
+        const { jsPDF } = window.jspdf; const doc = new jsPDF();
+        doc.text("Ficha de Equipamento", 14, 15);
+        doc.autoTable({
+            body: [
+                ['ID', i.item], ['Tipo', i.tipo_equipamento], ['Modelo', i.modelo],
+                ['Responsável', i.nome], ['Cidade', i.cidade], ['Patrimônio', i.patrimonio],
+                ['Serial', i.serial], ['IMEI', i.imei], ['Bateria', i.bateria], ['Obs', i.obs]
+            ],
+            startY: 20
+        });
+        doc.save(`ativo_${i.patrimonio || i.item}.pdf`);
+    }
+
+    function renderCities() {
+        const c = document.getElementById('lista-cidades');
+        const cds = [...new Set(dados.map(i => i.cidade))].filter(x => x).sort();
+        c.innerHTML = `<div class="city-badge ${citySel === 'TODAS' ? 'active' : ''}" onclick="setCity('TODAS')">Todas</div>`;
+        cds.forEach(x => c.innerHTML += `<div class="city-badge ${citySel === x ? 'active' : ''}" onclick="setCity('${x}')">${x}</div>`);
+    }
+    function setCity(c) { citySel = c; renderTable(); renderCities(); }
+    
+    function toggleTheme() { 
+        const n = document.body.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+        document.body.setAttribute('data-theme', n); localStorage.setItem('theme', n);
+    }
+    
+    function fecharModal() { document.getElementById('modal').style.display = 'none'; }
+    
+    async function deletarUsuario(id) { if(confirm("Excluir usuário?")) { await _supabase.from('usuarios_sistema').delete().eq('id', id); fecharModal(); loadData(); } }
+    async function deletarItem(id) { if(confirm("Excluir registro?")) { await _supabase.from('estoque').delete().eq('id', id); fecharModal(); loadData(); } }
+
+    async function carregarHistorico() {
+        const { data } = await _supabase.from('historico').select('*, estoque(*)').order('data_hora', {ascending: false}).limit(100);
+        historicoGlobal = data || [];
+        renderHistorico();
+    }
+
+    function renderHistorico() {
+        const b = document.getElementById('busca-hist').value.toUpperCase();
+        const filtrados = historicoGlobal.filter(h => `${h.tipo_acao} ${h.colaborador_novo} ${h.estoque?.modelo||''}`.toUpperCase().includes(b));
+        document.getElementById('lista-historico').innerHTML = filtrados.map(h => `
+            <div class="item-card">
+                <div style="color:var(--accent); font-size:11px;">${new Date(h.data_hora).toLocaleString()} - ${h.tipo_acao}</div>
+                <strong>${h.usuario_nome}</strong> moveu de <i>${h.colaborador_anterior}</i> para <b>${h.colaborador_novo}</b>
+                <div class="card-line">${h.estoque?.modelo || 'Item Removido'} (${h.estoque?.patrimonio || '---'})</div>
+            </div>`).join('');
+    }
+		async function carregarAlertasPendentes() {
+        const pends = dados.filter(i => i.obs && i.obs.includes("(PROVISÓRIO)"));
+        const box = document.getElementById('alerta-geral');
+        if(pends.length > 0) {
+            box.style.display = 'block';
+            document.getElementById('lista-alerta-pendente').innerHTML = pends.map(i => {
+                const isM = i.obs.includes("[MANUTENÇÃO]");
+                return `<div style="display:flex; justify-content:space-between; margin-bottom:8px; border-left: 4px solid ${isM ? 'var(--danger)' : 'var(--warning)'}; padding-left: 8px;">
+                    <span><strong style="color:${isM ? 'var(--danger)' : 'var(--warning)'}">${isM ? '🔴 MANUTENÇÃO' : '⚠️ PENDENTE'}</strong><br>${i.nome} - ${i.modelo}</span>
+                    <button class="btn-success" onclick='abrirEdicaoAtivo(${JSON.stringify(i).replace(/'/g, "&#39;")}, true)'>Resolver</button>
+                </div>`}).join('');
+        } else box.style.display = 'none';
+    }
+
+    async function novaLinhaAdmin() {
+        let m = 0; dados.forEach(d => { let v = parseInt(d.item); if(!isNaN(v) && v > m) m = v; });
+        const { data } = await _supabase.from('estoque').insert([{ item: (m + 1).toString(), nome: 'ESTOQUE', cidade: 'SJC' }]).select();
+        if(data) { await loadData(); abrirEdicaoAtivo(data[0]); }
+    }
+
+    function abrirEdicaoUsuario(u = null) {
+        document.getElementById('modal').style.display = 'flex';
+        document.getElementById('modal-titulo').innerText = u ? "Editar Usuário" : "Novo Usuário";
+        
+        document.getElementById('btn-deletar-modal').style.display = u ? 'block' : 'none';
+        if (u) {
+            document.getElementById('btn-deletar-modal').onclick = () => deletarUsuario(u.id);
+        }
+        
+        document.getElementById('btn-pdf-modal').style.display = 'none';
+        
+        document.getElementById('form-container').innerHTML = `
+            <div class="form-group"><label>Nome</label><input id="u-nome" value="${u?.nome_exibicao||''}"></div>
+            <div class="form-group"><label>Login</label><input id="u-login" value="${u?.login||''}"></div>
+            <div class="form-group"><label>Senha</label><input id="u-senha" value="${u?.senha||''}"></div>
+            <div class="form-group"><label>Nível</label><input id="u-nivel" value="${u?.nivel_acesso||'usuario'}"></div>`;
+            
+        document.getElementById('btn-salvar-modal').onclick = async () => {
+            const obj = { nome_exibicao: document.getElementById('u-nome').value, login: document.getElementById('u-login').value, senha: document.getElementById('u-senha').value, nivel_acesso: document.getElementById('u-nivel').value };
+            if(u) await _supabase.from('usuarios_sistema').update(obj).eq('id', u.id);
+            else await _supabase.from('usuarios_sistema').insert([obj]);
+            fecharModal(); loadData();
+        };
+    }
+    </script>
+</body>
+</html>
